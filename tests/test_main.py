@@ -2821,6 +2821,49 @@ def test_model_equality_generics():
             assert hash(m3) == hash(m4)
 
 
+def test_model_equality_cached_property_raising_on_comparison():
+    class Ambiguous:
+        # Mimics values like a numpy array, whose `==` is element-wise and raises
+        # when the truth value is ambiguous
+        def __eq__(self, other):
+            raise ValueError('The truth value of this value is ambiguous.')
+
+    class Model(BaseModel):
+        x: int
+
+        @cached_property
+        def cached(self) -> Any:
+            return Ambiguous()
+
+    m1 = Model(x=1)
+    m2 = Model(x=1)
+    assert isinstance(m1.cached, Ambiguous)
+    assert isinstance(m2.cached, Ambiguous)
+    assert m1 == m2
+
+
+def test_frozen_model_equality_cached_property_raising_on_comparison():
+    class Ambiguous:
+        def __eq__(self, other):
+            raise ValueError('The truth value of this value is ambiguous.')
+
+    class Model(BaseModel):
+        model_config = ConfigDict(frozen=True)
+        x: int
+
+        @cached_property
+        def cached(self) -> Any:
+            return Ambiguous()
+
+    m1 = Model(x=1)
+    m2 = Model(x=1)
+    assert isinstance(m1.cached, Ambiguous)
+    assert isinstance(m2.cached, Ambiguous)
+    # The generated `__hash__` of a frozen model only uses fields, so dict/set lookups
+    # call `__eq__` on models that hash equal
+    assert {m1: 1}[m2] == 1
+
+
 def test_model_validate_strict() -> None:
     class LaxModel(BaseModel):
         x: int
